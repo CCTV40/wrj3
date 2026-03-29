@@ -1,15 +1,14 @@
 import streamlit as st
-import gcoord
 from datetime import datetime
 
-# 页面配置（最顶部，绝对不能动）
+# 页面配置
 st.set_page_config(
     page_title="无人机航线规划系统",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 全局状态（安全、无渲染冲突）
+# 全局状态
 if "drone_data" not in st.session_state:
     st.session_state.drone_data = {
         "point_a": {"lat": 32.2322, "lng": 118.749, "set": False},
@@ -17,6 +16,28 @@ if "drone_data" not in st.session_state:
         "height": 50,
         "heartbeat": []
     }
+
+# ==================== WGS84 转 GCJ02（Python 原生，无需安装库）====================
+def wgs84_to_gcj02(lat, lng):
+    a = 6378245.0
+    ee = 0.00669342162962963
+    dlat = transform_lat(lng - 105.0, lat - 35.0)
+    dlng = transform_lng(lng - 105.0, lat - 35.0)
+    radlat = lat / 180.0 * 3.14159265358979323846
+    magic = math.sin(radlat)
+    magic = 1 - ee * magic * magic
+    sqrtmagic = math.sqrt(magic)
+    dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * 3.14159265358979323846 / 180.0)
+    dlng = (dlng * 180.0) / (a / sqrtmagic * math.cos(radlat) * 3.14159265358979323846 / 180.0)
+    return lat + dlat, lng + dlng
+
+def transform_lat(x, y):
+    return -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(abs(x))
+
+def transform_lng(x, y):
+    return 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(abs(x))
+
+import math
 
 # 侧边栏
 with st.sidebar:
@@ -45,7 +66,7 @@ if page == "航线规划":
         if st.button("设置A点", type="primary", key="set_a"):
             lat, lng = a_lat, a_lng
             if coord_system == "WGS-84":
-                lng, lat = gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02)
+                lat, lng = wgs84_to_gcj02(lat, lng)
             st.session_state.drone_data["point_a"] = {"lat": lat, "lng": lng, "set": True}
             st.success("✅ A点设置成功！")
 
@@ -56,7 +77,7 @@ if page == "航线规划":
         if st.button("设置B点", type="primary", key="set_b"):
             lat, lng = b_lat, b_lng
             if coord_system == "WGS-84":
-                lng, lat = gcoord.transform([lng, lat], gcoord.WGS84, gcoord.GCJ02)
+                lat, lng = wgs84_to_gcj02(lat, lng)
             st.session_state.drone_data["point_b"] = {"lat": lat, "lng": lng, "set": True}
             st.success("✅ B点设置成功！")
 
@@ -79,7 +100,6 @@ if page == "飞行监控":
     st.title("✈️ 飞行监控（心跳包）")
     st.divider()
 
-    # 上传心跳
     if st.button("上传测试心跳包", type="primary", key="upload_heartbeat"):
         heartbeat = {
             "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -101,7 +121,6 @@ if page == "飞行监控":
     else:
         st.info("暂无心跳包数据")
 
-    # 清空数据 —— 已彻底修复，无 st.rerun()
     if st.button("清空历史数据", type="secondary", key="clear"):
         st.session_state.drone_data["heartbeat"] = []
         st.success("✅ 已清空历史数据")
