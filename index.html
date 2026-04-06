@@ -1,56 +1,54 @@
-<!-- 无人机障碍物多边形圈选 + 本地记忆功能 -->
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
-<script>
-// 初始化绘图图层
-const drawnItems = new L.FeatureGroup();
-map.addLayer(drawnItems);
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>无人机地图</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
 
-// 初始化绘图控件（仅保留多边形绘制）
-const drawControl = new L.Control.Draw({
-    edit: {
-        featureGroup: drawnItems,
-        poly: { allowIntersection: false }
-    },
-    draw: {
-        polygon: {
-            allowIntersection: false,
-            showArea: true
-        },
-        polyline: false,
-        rectangle: false,
-        circle: false,
-        marker: false,
-        circlemarker: false
-    }
-});
-map.addControl(drawControl);
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
-// 绘制完成后保存到 localStorage（记忆功能）
-map.on(L.Draw.Event.CREATED, function (e) {
-    const layer = e.layer;
-    drawnItems.addLayer(layer);
-    // 提取多边形坐标
-    const points = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
-    // 读取历史数据并追加
-    const history = JSON.parse(localStorage.getItem('uavObstacles') || '[]');
-    history.push({ points: points, color: '#ff0000' });
-    localStorage.setItem('uavObstacles', JSON.stringify(history));
-});
+    <script>
+        // 初始化地图
+        var map = L.map('map').setView([39.9042, 116.4074], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-// 页面加载时自动恢复历史圈选
-function loadSavedObstacles() {
-    const saved = localStorage.getItem('uavObstacles');
-    if (saved) {
-        const obstacles = JSON.parse(saved);
-        obstacles.forEach(obs => {
-            L.polygon(obs.points, { color: obs.color })
-             .addTo(drawnItems)
-             .bindPopup("障碍物区域");
+        // 绘图工具
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        var drawControl = new L.Control.Draw({
+            edit: { featureGroup: drawnItems },
+            draw: { polygon: true }
         });
-    }
-}
+        map.addControl(drawControl);
 
-// 页面加载完成后执行恢复
+        // 记忆功能
+        map.on('draw:created', function (e) {
+            var layer = e.layer;
+            drawnItems.addLayer(layer);
+            localStorage.setItem('obs', JSON.stringify(drawnItems.toGeoJSON()));
+        });
+
+        window.onload = function () {
+            var data = localStorage.getItem('obs');
+            if (data) {
+                var geojson = JSON.parse(data);
+                L.geoJSON(geojson).addTo(drawnItems);
+            }
+        };
+    </script>
+</body>
+</html>
 map.whenReady(loadSavedObstacles);
 </script>
