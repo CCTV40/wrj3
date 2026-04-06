@@ -1,23 +1,56 @@
-<!-- 无人机障碍物圈选 + 记忆功能 -->
-<script src="https://unpkg.com/leaflet.editable@1.1.0/dist/Leaflet.Editable.js"></script>
+<!-- 无人机障碍物多边形圈选 + 本地记忆功能 -->
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 <script>
-const drawnItems = new L.FeatureGroup().addTo(map);
-const drawControl = new L.Control.Draw({
-  edit: { featureGroup: drawnItems },
-  draw: { polygon: true }
-}).addTo(map);
+// 初始化绘图图层
+const drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
 
-map.on(L.Draw.Event.CREATED, e => {
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-  const points = layer.getLatLngs()[0].map(p => [p.lat, p.lng]);
-  const obs = JSON.parse(localStorage.getItem('obs') || '[]');
-  obs.push(points);
-  localStorage.setItem('obs', JSON.stringify(obs));
+// 初始化绘图控件（仅保留多边形绘制）
+const drawControl = new L.Control.Draw({
+    edit: {
+        featureGroup: drawnItems,
+        poly: { allowIntersection: false }
+    },
+    draw: {
+        polygon: {
+            allowIntersection: false,
+            showArea: true
+        },
+        polyline: false,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+    }
+});
+map.addControl(drawControl);
+
+// 绘制完成后保存到 localStorage（记忆功能）
+map.on(L.Draw.Event.CREATED, function (e) {
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+    // 提取多边形坐标
+    const points = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+    // 读取历史数据并追加
+    const history = JSON.parse(localStorage.getItem('uavObstacles') || '[]');
+    history.push({ points: points, color: '#ff0000' });
+    localStorage.setItem('uavObstacles', JSON.stringify(history));
 });
 
-window.onload = () => {
-  const obs = JSON.parse(localStorage.getItem('obs') || '[]');
-  obs.forEach(p => L.polygon(p, {color:'red'}).addTo(drawnItems));
-};
+// 页面加载时自动恢复历史圈选
+function loadSavedObstacles() {
+    const saved = localStorage.getItem('uavObstacles');
+    if (saved) {
+        const obstacles = JSON.parse(saved);
+        obstacles.forEach(obs => {
+            L.polygon(obs.points, { color: obs.color })
+             .addTo(drawnItems)
+             .bindPopup("障碍物区域");
+        });
+    }
+}
+
+// 页面加载完成后执行恢复
+map.whenReady(loadSavedObstacles);
 </script>
